@@ -1,6 +1,7 @@
 from rest_framework import viewsets, generics
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from django.db.models.query import QuerySet
 from .serializers import UserSerializer
 
 class TenantAwareModelViewSet(viewsets.ModelViewSet):
@@ -9,7 +10,6 @@ class TenantAwareModelViewSet(viewsets.ModelViewSet):
     All future Module ViewSets (StudentProfileViewSet, AttendanceViewSet, InvoiceViewSet) 
     MUST inherit from this to guarantee strict data isolation across the SaaS.
     """
-    # By default, enforce authentication on all tenant-aware routes
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -23,7 +23,9 @@ class TenantAwareModelViewSet(viewsets.ModelViewSet):
         )
 
         queryset = self.queryset
-        if isinstance(queryset, getattr(queryset, 'all', tuple)):
+        
+        # FIX: Check against the actual Django QuerySet class
+        if isinstance(queryset, QuerySet):
             queryset = queryset.all()
 
         user = self.request.user
@@ -32,7 +34,7 @@ class TenantAwareModelViewSet(viewsets.ModelViewSet):
         if hasattr(user, 'school') and user.school:
             return queryset.filter(school=user.school)
             
-        # Security Fallback: If a user somehow has no school assigned (e.g. inactive superuser), 
+        # Security Fallback: If a user somehow has no school assigned, 
         # return an empty queryset to prevent cross-tenant data leaks.
         return queryset.none()
 
@@ -46,6 +48,27 @@ class TenantAwareModelViewSet(viewsets.ModelViewSet):
         if not hasattr(user, 'school') or not user.school:
             raise PermissionDenied("You must be assigned to a school to create records.")
             
+        # DYNAMIC ANTI-HIJACKING FIX: 
+        # Iterate over all incoming relational fields (user, parent, student, etc.)
+        # and ensure they belong to the admin's school.
+        for field_name, value in serializer.validated_data.items():
+            if hasattr(value, 'school') and value.school != user.school:
+                raise ValidationError({field_name: f"This {field_name} does not belong to your school."})
+            
+        serializer.save(school=user.school)
+
+    def perform_update(self, serializer):
+        """
+        Intercept updates to prevent maliciously re-assigning records to users 
+        or objects from other schools.
+        """
+        user = self.request.user
+
+        # DYNAMIC ANTI-HIJACKING FIX
+        for field_name, value in serializer.validated_data.items():
+            if hasattr(value, 'school') and value.school != user.school:
+                raise ValidationError({field_name: f"This {field_name} does not belong to your school."})
+
         serializer.save(school=user.school)
 
 

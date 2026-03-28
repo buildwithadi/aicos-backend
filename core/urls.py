@@ -8,6 +8,8 @@ urlpatterns = [
     # API Routes Base
     path('api/v1/', include('tenants.urls')),
     path('api/v1/profiles/', include('profiles.urls')),
+    path('api/v1/academics/', include('academics.urls')),
+    path('api/v1/operations/', include('operations.urls')),
     
     # Swagger / OpenAPI Endpoints
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

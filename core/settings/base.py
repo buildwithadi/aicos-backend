@@ -43,8 +43,8 @@ LOCAL_APPS = [
     'tenants',        # Global core, Auth, and Tenant (School) foundation
     'accounts',       # RBAC (Roles, Permissions)
     'profiles',     # Student, Teacher, Parent profiles
-    # 'academics',    # Classes, Sections, Enrollments
-    # 'operations',   # Attendance, Exams, Grades
+    'academics',    # Classes, Sections, Enrollments
+    'operations',   # Attendance, Exams, Grades
     # 'finance',      # Invoices, Payments
 ]
 
