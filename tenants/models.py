@@ -51,5 +51,47 @@ class User(AbstractUser):
 
     objects = CustomUserManager()
 
+    def has_perm(self, perm, obj=None):
+        """
+        BRIDGE: Routes Django Admin permission checks to our custom RBAC engine.
+        """
+        if self.is_superuser:
+            return True
+            
+        # 1. Check standard Django permissions first
+        if super().has_perm(perm, obj):
+            return True
+            
+        # 2. Check our Custom UserRole mappings
+        # Django Admin asks for permissions in this format: "app_label.action_modelname"
+        # Example: "operations.view_attendance" or "operations.add_studentgrade"
+        if self.school and hasattr(self, 'user_roles'):
+            return self.user_roles.filter(
+                school=self.school,
+                role__permissions__codename=perm
+            ).exists()
+            
+        return False
+
+    def has_module_perms(self, app_label):
+        """
+        BRIDGE: Determines if the user can see the App module in the Admin sidebar.
+        """
+        if self.is_superuser:
+            return True
+            
+        if super().has_module_perms(app_label):
+            return True
+            
+        # If our custom RBAC grants ANY permission starting with the app_label, 
+        # show the module in the Admin sidebar.
+        if self.school and hasattr(self, 'user_roles'):
+            return self.user_roles.filter(
+                school=self.school,
+                role__permissions__codename__startswith=f"{app_label}."
+            ).exists()
+            
+        return False
+
     def __str__(self):
         return self.email

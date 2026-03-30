@@ -3,6 +3,26 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from .models import School, User
 
+class TenantAwareModelAdmin(admin.ModelAdmin):
+    """
+    Base Admin class to ensure non-superusers (like Teachers) 
+    only see their own school's data in the Django Admin panel.
+    """
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        if request.user.school:
+            return qs.filter(school=request.user.school)
+        return qs.none()
+
+    def save_model(self, request, obj, form, change):
+        # Auto-assign the teacher's school to the object being created
+        if not change and hasattr(obj, 'school') and getattr(obj, 'school', None) is None:
+            if request.user.school:
+                obj.school = request.user.school
+        super().save_model(request, obj, form, change)
+
 class CustomUserCreationForm(UserCreationForm):
     class Meta:
         model = User
