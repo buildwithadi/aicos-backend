@@ -1,28 +1,43 @@
 from .base import *
 
-# Ensure DEBUG is strictly False in production
-DEBUG = False
+# In production, we usually want this to be False. 
+# However, during this initial VPS setup phase, we'll let it read from .env
+# so you can see Django error pages if something goes wrong.
+DEBUG = env.bool('DEBUG', default=False)
 
+# Read allowed hosts from environment. 
+# Ensure your .env has ALLOWED_HOSTS=187.127.139.208
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
+# ------------------------------------------------------------------------
+# DATABASE CONFIGURATION (Neon / PostgreSQL)
+# ------------------------------------------------------------------------
 DATABASES = {
     'default': env.db('DATABASE_URL')
 }
 
-# Ensure cookies are only sent over HTTPS
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# ------------------------------------------------------------------------
+# SECURITY CONFIGURATION
+# ------------------------------------------------------------------------
 
-# HTTP Strict Transport Security (HSTS)
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# IMPORTANT: We are disabling these temporarily. 
+# Once you have a Domain Name (e.g., erp.example.com) and an SSL certificate 
+# via Certbot/Nginx, you should set these back to True.
 
-# Redirect all HTTP traffic to HTTPS
-SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_SSL_REDIRECT = False  # This was likely causing your Timeout!
+SECURE_HSTS_SECONDS = 0 
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
-# Required if deploying behind a proxy like Nginx or an AWS/Azure Load Balancer
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
+# ------------------------------------------------------------------------
+# CORS CONFIGURATION
+# ------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
+# ------------------------------------------------------------------------
+# STATIC & MEDIA FILES
+# ------------------------------------------------------------------------
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Ensure Whitenoise or Nginx is configured to serve these in production
