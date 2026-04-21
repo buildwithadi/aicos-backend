@@ -3,11 +3,67 @@ from django.db import transaction, IntegrityError
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from tenants.views import TenantAwareModelViewSet
-from .models import StudentEnrollment, TeacherAssignment
-from .serializers import StudentEnrollmentSerializer, TeacherAssignmentSerializer, BulkPromotionSerializer
+from .models import StudentEnrollment, TeacherAssignment, AcademicYear, ClassLevel, Section, Subject
+from .serializers import (
+    StudentEnrollmentSerializer, TeacherAssignmentSerializer, BulkPromotionSerializer,
+    AcademicYearSerializer, ClassLevelSerializer, SectionSerializer, SubjectSerializer
+)
+
+# --- NEW ACADEMIC BASE VIEWSETS ---
+
+@extend_schema_view(
+    list=extend_schema(summary="List all academic years"),
+    create=extend_schema(summary="Create a new academic year"),
+    retrieve=extend_schema(summary="Retrieve academic year details"),
+    update=extend_schema(summary="Update an academic year"),
+    partial_update=extend_schema(summary="Partially update an academic year"),
+    destroy=extend_schema(summary="Delete an academic year"),
+)
+class AcademicYearViewSet(TenantAwareModelViewSet):
+    queryset = AcademicYear.objects.all()
+    serializer_class = AcademicYearSerializer
+
+@extend_schema_view(
+    list=extend_schema(summary="List all class levels"),
+    create=extend_schema(summary="Create a new class level"),
+    retrieve=extend_schema(summary="Retrieve class level details"),
+    update=extend_schema(summary="Update a class level"),
+    partial_update=extend_schema(summary="Partially update a class level"),
+    destroy=extend_schema(summary="Delete a class level"),
+)
+class ClassLevelViewSet(TenantAwareModelViewSet):
+    queryset = ClassLevel.objects.all()
+    serializer_class = ClassLevelSerializer
+
+@extend_schema_view(
+    list=extend_schema(summary="List all sections"),
+    create=extend_schema(summary="Create a new section"),
+    retrieve=extend_schema(summary="Retrieve section details"),
+    update=extend_schema(summary="Update a section"),
+    partial_update=extend_schema(summary="Partially update a section"),
+    destroy=extend_schema(summary="Delete a section"),
+)
+class SectionViewSet(TenantAwareModelViewSet):
+    queryset = Section.objects.select_related('class_level').all()
+    serializer_class = SectionSerializer
+
+@extend_schema_view(
+    list=extend_schema(summary="List all subjects"),
+    create=extend_schema(summary="Create a new subject"),
+    retrieve=extend_schema(summary="Retrieve subject details"),
+    update=extend_schema(summary="Update a subject"),
+    partial_update=extend_schema(summary="Partially update a subject"),
+    destroy=extend_schema(summary="Delete a subject"),
+)
+class SubjectViewSet(TenantAwareModelViewSet):
+    queryset = Subject.objects.prefetch_related('class_levels').all()
+    serializer_class = SubjectSerializer
+
+
+# --- EXISTING ENROLLMENT & ASSIGNMENT VIEWSETS ---
 
 class StudentEnrollmentViewSet(TenantAwareModelViewSet):
     queryset = StudentEnrollment.objects.select_related(
@@ -34,14 +90,9 @@ class StudentEnrollmentViewSet(TenantAwareModelViewSet):
 
         return qs
 
-    # --- NEW ENDPOINT FOR TASK 3.4 ---
     @extend_schema(request=BulkPromotionSerializer, responses={201: dict})
     @action(detail=False, methods=['post'], url_path='bulk-promote')
     def bulk_promote(self, request):
-        """
-        POST /api/v1/academics/enrollments/bulk-promote/
-        Promotes a batch of students to a new class/section for a new academic year.
-        """
         serializer = BulkPromotionSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
 
@@ -49,7 +100,6 @@ class StudentEnrollmentViewSet(TenantAwareModelViewSet):
         school = request.user.school
         student_ids = data['student_ids']
 
-        # Prepare objects for bulk insertion
         enrollments_to_create = []
         for student_id in student_ids:
             enrollments_to_create.append(
@@ -63,9 +113,7 @@ class StudentEnrollmentViewSet(TenantAwareModelViewSet):
             )
 
         try:
-            # transaction.atomic() ensures that if one fails, NONE are saved.
             with transaction.atomic():
-                # bulk_create writes all rows in a single SQL query (highly optimized!)
                 StudentEnrollment.objects.bulk_create(enrollments_to_create)
                 
             return Response(
@@ -74,7 +122,6 @@ class StudentEnrollmentViewSet(TenantAwareModelViewSet):
             )
             
         except IntegrityError:
-            # Catches the unique_student_enrollment_per_year constraint
             return Response(
                 {"detail": "Promotion failed. One or more students are already enrolled in the target academic year."},
                 status=status.HTTP_400_BAD_REQUEST

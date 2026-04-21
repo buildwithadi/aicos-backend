@@ -2,7 +2,11 @@ from rest_framework import viewsets, generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.db.models.query import QuerySet
+from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .serializers import UserSerializer
+
+User = get_user_model()
 
 class TenantAwareModelViewSet(viewsets.ModelViewSet):
     """
@@ -82,3 +86,21 @@ class CurrentUserView(generics.RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+# --- NEW USER CRUD ENDPOINTS ---
+
+@extend_schema_view(
+    list=extend_schema(summary="List all users in the school"),
+    create=extend_schema(summary="Create a new user"),
+    retrieve=extend_schema(summary="Retrieve user details"),
+    update=extend_schema(summary="Update a user"),
+    partial_update=extend_schema(summary="Partially update a user"),
+    destroy=extend_schema(summary="Delete a user"),
+)
+class UserViewSet(TenantAwareModelViewSet):
+    """
+    CRUD endpoints for Tenant Users. 
+    Automatically isolated to the requester's school.
+    """
+    queryset = User.objects.select_related('school').all()
+    serializer_class = UserSerializer

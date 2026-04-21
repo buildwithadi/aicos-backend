@@ -1,6 +1,36 @@
 from rest_framework import serializers
-from .models import StudentEnrollment, TeacherAssignment, AcademicYear, ClassLevel, Section
+from .models import StudentEnrollment, TeacherAssignment, AcademicYear, ClassLevel, Section, Subject
 from profiles.models import StudentProfile
+
+# --- NEW ACADEMIC BASE SERIALIZERS ---
+
+class AcademicYearSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AcademicYear
+        fields = '__all__'
+        read_only_fields = ('school', 'id')
+
+class ClassLevelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClassLevel
+        fields = '__all__'
+        read_only_fields = ('school', 'id')
+
+class SectionSerializer(serializers.ModelSerializer):
+    class_level_name = serializers.CharField(source='class_level.name', read_only=True)
+
+    class Meta:
+        model = Section
+        fields = '__all__'
+        read_only_fields = ('school', 'id')
+
+class SubjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subject
+        fields = '__all__'
+        read_only_fields = ('school', 'id')
+
+# --- EXISTING ENROLLMENT & ASSIGNMENT SERIALIZERS ---
 
 class StudentEnrollmentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.first_name', read_only=True)
@@ -20,13 +50,11 @@ class StudentEnrollmentSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         
-        # Only check this on creation (POST), not updates (PUT/PATCH)
         if request and request.method == 'POST':
             school = request.user.school
             student = attrs.get('student')
             academic_year = attrs.get('academic_year')
 
-            # Check if this exact enrollment already exists
             if StudentEnrollment.objects.filter(school=school, student=student, academic_year=academic_year).exists():
                 raise serializers.ValidationError(
                     {"non_field_errors": ["This student is already enrolled in this academic year. Please update the existing enrollment instead."]}
@@ -64,14 +92,12 @@ class BulkPromotionSerializer(serializers.Serializer):
         request = self.context.get('request')
         school = request.user.school
 
-        # 1. Anti-Hijacking: Ensure ALL students belong to this school
         student_count = StudentProfile.objects.filter(
             id__in=attrs['student_ids'], school=school
         ).count()
         if student_count != len(attrs['student_ids']):
             raise serializers.ValidationError("One or more students do not exist or belong to another school.")
 
-        # 2. Anti-Hijacking: Ensure target entities belong to this school
         if not AcademicYear.objects.filter(id=attrs['target_academic_year_id'], school=school).exists():
             raise serializers.ValidationError({"target_academic_year_id": "Invalid academic year."})
         

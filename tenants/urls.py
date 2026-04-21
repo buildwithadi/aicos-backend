@@ -1,9 +1,13 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CurrentUserView
+from .views import CurrentUserView, UserViewSet
+
+router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
 
 urlpatterns = [
     # JWT Authentication Endpoints
@@ -12,4 +16,7 @@ urlpatterns = [
     
     # Custom User Endpoints
     path('auth/me/', CurrentUserView.as_view(), name='current_user'),
+    
+    # Tenant User CRUD Endpoints (Registers /users/)
+    path('', include(router.urls)),
 ]
